@@ -1,0 +1,6 @@
+[console_scripts]
+comet = comet_ml.scripts.comet:main
+
+[spacy_loggers]
+comet_ml.spacy.logger.v1 = comet_ml.integration.spacy:comet_logger_v1
+

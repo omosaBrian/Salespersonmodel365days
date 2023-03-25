@@ -1,8 +1,11 @@
 from flask import Flask, request, jsonify
 import pandas as pd
 import joblib
+import os
+from comet_ml import Experiment
 from pmdarima.arima import auto_arima
 from sklearn.metrics import mean_absolute_error, mean_squared_error
+
 # read in CSV file
 data = pd.read_csv('prdctslsvatlstngsumry.csv')
 
@@ -17,6 +20,25 @@ daily_sales.set_index('date', inplace=True)
 
 # resample the daily sales data to monthly frequency and calculate the total sales for each month
 monthly_sales = daily_sales.resample('MS').sum()
+# Create an experiment with your api key
+experiment = Experiment(
+    api_key="byw9dL2AuQJrh1i2XQUl4eoci",
+    project_name="penguins",
+    workspace="maldev3555",
+)
+
+# Read the CSV file as a string
+with open(os.path.join(os.getcwd(), "prdctslsvatlstngsumry.csv"), "r") as f:
+    file_data = f.read()
+
+# Log the dataset as an asset
+experiment.log_asset("/home/runner/Salespersonmodel365days/prdctslsvatlstngsumry.csv", file_name="prdctslsvatlstngsumry.csv")
+
+# set the index name for the table
+monthly_sales.index.name = 'Date'
+
+# display the monthly_sales data as a markdown table
+experiment.display(monthly_sales.to_markdown())
 
 # use monthly sales data to train the model
 model = auto_arima(monthly_sales['net sales'], seasonal=False)
@@ -31,17 +53,27 @@ forecast_df = pd.DataFrame({'date': future_months, 'total sales Forecast': forec
 forecast_df.set_index('date', inplace=True)
 # print out the forecasted net sales for the next 12 months
 print("Forecasted net sales for the Next 12 Months:\n", forecast_df)
+
 # evaluate the performance of the model using advanced metrics
 preds = model.predict(n_periods=len(monthly_sales))
 mae = mean_absolute_error(monthly_sales['net sales'], preds)
 mse = mean_squared_error(monthly_sales['net sales'], preds)
-
 # print out the performance metrics of the model
 print("\nPerformance Metrics:")
 print("MAE: ", mae)
 print("MSE: ", mse)
-# save the trained ARIMA model as a joblib file
+
+# Log the forecast data as a table
+experiment.log_table("forecast_table", forecast_df)
+
+# Log the performance metrics
+experiment.log_metric("MAE", mae)
+experiment.log_metric("MSE", mse)
+
+# Save the trained ARIMA model as an artifact
 joblib.dump(model, 'model.joblib')
+experiment.log_asset('model.joblib')
+experiment.end()
 
 # Load the saved model
 model = joblib.load('model.joblib')
@@ -60,6 +92,7 @@ def predict():
 
     # Make a prediction
     forecast = model.predict(input_data)
+
 
     # Create a response dictionary
     response = {
